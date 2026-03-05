@@ -23,6 +23,25 @@ def load_data():
 
 df = load_data()
 
+# Ensure required columns exist to prevent KeyErrors
+required_defaults = {
+    'emi_scenario': 'Standard',
+    'employment_type': 'Salaried',
+    'requested_amount': 0,
+    'requested_tenure': 24,
+    'current_emi_amount': 0,
+    'monthly_rent': 0,
+    'school_fees': 0,
+    'college_fees': 0,
+    'travel_expenses': 0,
+    'groceries_utilities': 0,
+    'other_monthly_expenses': 0
+}
+
+for col, default in required_defaults.items():
+    if col not in df.columns:
+        df[col] = default
+
 if df is None:
     st.error("⚠️ Data not found! Please run preprocessing first.")
     st.stop()
@@ -88,7 +107,7 @@ with col1:
                      'Not_Eligible': '#dc3545'
                  })
     fig.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col2:
     st.markdown("### 💰 Max Monthly EMI Distribution")
@@ -97,7 +116,7 @@ with col2:
     fig.update_layout(xaxis_title="Max Monthly EMI (₹)", 
                      yaxis_title="Count",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Row 2: Age and Salary Analysis
 st.markdown("---")
@@ -115,7 +134,7 @@ with col1:
     fig.update_layout(xaxis_title="Eligibility Status", 
                      yaxis_title="Age",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col2:
     st.markdown("### 💵 Monthly Salary by Eligibility")
@@ -129,7 +148,7 @@ with col2:
     fig.update_layout(xaxis_title="Eligibility Status", 
                      yaxis_title="Monthly Salary (₹)",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Row 3: Credit Score and Employment Analysis
 st.markdown("---")
@@ -147,7 +166,7 @@ with col1:
     fig.update_layout(xaxis_title="Eligibility Status", 
                      yaxis_title="Credit Score",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col2:
     st.markdown("### 💼 Employment Type Analysis")
@@ -163,31 +182,46 @@ with col2:
                      xaxis_title="Employment Type",
                      yaxis_title="Percentage (%)",
                      legend_title="Eligibility")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Row 4: EMI Scenario Analysis
 st.markdown("---")
 st.markdown("### 🎯 EMI Scenario Comparison")
 
-scenario_stats = df.groupby('emi_scenario').agg({
-    'requested_amount': ['mean', 'median'],
-    'requested_tenure': 'mean',
-    'max_monthly_emi': 'mean',
-    'emi_eligibility': lambda x: (x == 'Eligible').sum() / len(x) * 100
-}).round(2)
+agg_dict = {
+    'max_monthly_emi': 'mean'
+}
 
-scenario_stats.columns = ['Avg_Amount', 'Median_Amount', 'Avg_Tenure', 'Avg_Max_EMI', 'Approval_Rate']
+if 'requested_amount' in df.columns:
+    agg_dict['requested_amount'] = ['mean', 'median']
+
+if 'requested_tenure' in df.columns:
+    agg_dict['requested_tenure'] = 'mean'
+
+# Create scenario statistics
+scenario_stats = df.groupby('emi_scenario').agg(agg_dict).round(2)
+
+# Flatten multi-level column names
+scenario_stats.columns = ['_'.join(col).strip('_') for col in scenario_stats.columns]
+
+# Calculate approval rate
+approval_rate = df.groupby('emi_scenario')['emi_eligibility'] \
+    .apply(lambda x: (x == 'Eligible').sum() / len(x) * 100)
+
+scenario_stats['Approval_Rate'] = approval_rate
+
+# Reset index
 scenario_stats = scenario_stats.reset_index()
 
 col1, col2 = st.columns(2)
 
 with col1:
-    fig = px.bar(scenario_stats, x='emi_scenario', y='Avg_Amount',
-                color='Avg_Amount', color_continuous_scale='Blues')
+    fig = px.bar(scenario_stats, x='emi_scenario', y='requested_amount_mean',
+                color='requested_amount_mean', color_continuous_scale='Blues')
     fig.update_layout(xaxis_title="EMI Scenario",
                      yaxis_title="Average Requested Amount (₹)",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col2:
     fig = px.bar(scenario_stats, x='emi_scenario', y='Approval_Rate',
@@ -195,7 +229,7 @@ with col2:
     fig.update_layout(xaxis_title="EMI Scenario",
                      yaxis_title="Approval Rate (%)",
                      showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Detailed Statistics Table
 st.markdown("---")
@@ -209,7 +243,8 @@ st.markdown("### 💸 Financial Metrics Analysis")
 # Calculate derived metrics
 expense_cols = ['monthly_rent', 'school_fees', 'college_fees', 
                'travel_expenses', 'groceries_utilities', 'other_monthly_expenses']
-df_filtered['total_expenses'] = df_filtered[expense_cols].sum(axis=1)
+existing_expense_cols = [c for c in expense_cols if c in df_filtered.columns]
+df_filtered['total_expenses'] = df_filtered[existing_expense_cols].sum(axis=1)
 df_filtered['debt_to_income'] = (df_filtered['current_emi_amount'] / df_filtered['monthly_salary'] * 100).clip(0, 100)
 df_filtered['expense_ratio'] = (df_filtered['total_expenses'] / df_filtered['monthly_salary'] * 100).clip(0, 150)
 
@@ -225,7 +260,7 @@ with col1:
                     'Not_Eligible': '#dc3545'
                 })
     fig.update_layout(showlegend=False, xaxis_title="", yaxis_title="DTI Ratio (%)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col2:
     st.markdown("#### Expense Ratio")
@@ -237,7 +272,7 @@ with col2:
                     'Not_Eligible': '#dc3545'
                 })
     fig.update_layout(showlegend=False, xaxis_title="", yaxis_title="Expense Ratio (%)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with col3:
     st.markdown("#### Bank Balance")
@@ -249,7 +284,7 @@ with col3:
                     'Not_Eligible': '#dc3545'
                 })
     fig.update_layout(showlegend=False, xaxis_title="", yaxis_title="Balance (₹)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Key Insights
 st.markdown("---")
@@ -286,7 +321,8 @@ st.markdown("### 🔗 Feature Correlations")
 
 numerical_cols = ['age', 'monthly_salary', 'credit_score', 'bank_balance', 
                  'current_emi_amount', 'requested_amount', 'max_monthly_emi']
-corr_matrix = df_filtered[numerical_cols].corr()
+existing_num_cols = [c for c in numerical_cols if c in df_filtered.columns]
+corr_matrix = df_filtered[existing_num_cols].corr()
 
 fig = px.imshow(corr_matrix, 
                 text_auto=True, 
@@ -294,7 +330,7 @@ fig = px.imshow(corr_matrix,
                 color_continuous_scale='RdBu_r',
                 zmin=-1, zmax=1)
 fig.update_layout(title="Correlation Matrix", height=600)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # Download section
 st.markdown("---")

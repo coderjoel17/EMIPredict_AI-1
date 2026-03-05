@@ -1,3 +1,7 @@
+import os
+
+os.makedirs("models/classification", exist_ok=True)
+os.makedirs("models/regression", exist_ok=True)
 """
 Machine Learning Model Training Module
 Train and evaluate classification and regression models with MLflow tracking
@@ -398,20 +402,32 @@ class MLModelTrainer:
         print("\n" + "="*60)
         print("STEP 5: SAVING BEST MODELS")
         print("="*60)
-        
+
+        import os
+
+        # Ensure directories exist
+        os.makedirs("models/classification", exist_ok=True)
+        os.makedirs("models/regression", exist_ok=True)
+
         # Save classification model
-        joblib.dump(self.best_classification_model, 
-                   'models/classification/best_model.pkl')
+        joblib.dump(
+            self.best_classification_model,
+            "models/classification/best_model.pkl"
+            )
         print("✓ Saved: models/classification/best_model.pkl")
-        
+
         # Save regression model
-        joblib.dump(self.best_regression_model,
-                   'models/regression/best_model.pkl')
+        joblib.dump(
+            self.best_regression_model,
+            "models/regression/best_model.pkl"
+            )
         print("✓ Saved: models/regression/best_model.pkl")
-        
+
         # Save feature names
         feature_names = self.X_train.columns.tolist()
-        pd.DataFrame({'features': feature_names}).to_csv('models/feature_names.csv', index=False)
+        pd.DataFrame({'features': feature_names}).to_csv(
+            "models/feature_names.csv", index=False
+            )
         print("✓ Saved: models/feature_names.csv")
         
     def run_complete_training_pipeline(self):
